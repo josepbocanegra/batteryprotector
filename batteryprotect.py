@@ -1,40 +1,35 @@
 import psutil
 import time
 import bluetooth
-from datetime import datetime
+import logging
+from systemd.journal import JournalHandler
 
-def log(message):
-    with open("/home/josep/batterystatus.txt", "a") as f:
-        f.write(str(datetime.now())+ " | " + str(message) + '\n')
-        f.close()
+batteryProtectorAddress = '4c:11:ae:a0:17:4e'
+port = 1
 
+def sendCommand(command):
+    s = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+    s.connect((batteryProtectorAddress, port))
+    s.send(command)
+    s.close()
 
-
-counter = 0
+log = logging.getLogger('batteryprotector')
+log.addHandler(JournalHandler())
+log.setLevel(logging.INFO)
+log.info("Battery Protector started")
 
 while True:  
-    try:  
-        batteryProtectorAddress = '4c:11:ae:a0:17:4e'
-        port = 1
-        s = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-        s.connect((batteryProtectorAddress, port))
-        log("connected " + str(counter))
-        counter = counter + 1
+    try:         
         battery = psutil.sensors_battery()
         plugged = battery.power_plugged
         battery_percent = battery.percent
-        log(str(plugged) + "|" + str(battery_percent) + "|check" )
-        if battery_percent > 83:
-            s.send('0')
-            log(str(plugged) + "|" + str(battery_percent) + "|off" )
-        if battery_percent < 83:
-            s.send('1')
-            log(str(plugged) + "|" + str(battery_percent) + "|on")
-        s.close()
-        log("disconnected")
+        if (plugged == True and battery_percent > 85):
+            sendCommand('0')
+            log.info("Charge off")
+        if (plugged == False and battery_percent < 65):
+            sendCommand('1')
+            log.info("Charge on")
         time.sleep(60)
     except Exception as e:
-        log("Exception")
-        log(str(e))
+        log.error(str(e))
         time.sleep(60)
-

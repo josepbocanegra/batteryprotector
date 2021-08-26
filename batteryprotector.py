@@ -2,20 +2,46 @@ import psutil
 import time
 import bluetooth
 import logging
+import subprocess
 from systemd.journal import JournalHandler
-
-batteryProtectorAddress = '4c:11:ae:a0:17:4e'
-port = 1
-
-def sendCommand(command):
-    s = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-    s.connect((batteryProtectorAddress, port))
-    s.send(command)
-    s.close()
 
 log = logging.getLogger('batteryprotector')
 log.addHandler(JournalHandler())
 log.setLevel(logging.INFO)
+
+computerBluetoothAddress = "08:5B:D6:D0:33:96"
+batteryProtectorAddress = '4c:11:ae:a0:17:4e'
+port = 1
+
+def bluetoothIsActive():
+    stdoutdata = subprocess.getoutput("hcitool dev")  
+    if computerBluetoothAddress in stdoutdata.split():
+        return True
+    return False
+
+def switchBluetoothOff():
+    time.sleep(10)
+    subprocess.call(["rfkill", "block", "bluetooth"]) 
+    log.info("Switching bluetooth off")
+
+def switchBluetoothOn():
+    subprocess.call(["rfkill", "unblock", "bluetooth"])
+    log.info("Switching bluetooth on")
+    time.sleep(10)
+
+def setCharger(chargingStatus):
+    bluetoothActiveBeforeSettingChargeMode = bluetoothIsActive()
+    if (not bluetoothActiveBeforeSettingChargeMode):
+        switchBluetoothOn()
+    s = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+    s.connect((batteryProtectorAddress, port))
+    log.info("Charger " + chargingStatus)
+    command = '1' if chargingStatus == "On" else '0'
+    s.send(command)
+    s.close()
+    if (not bluetoothActiveBeforeSettingChargeMode):
+        switchBluetoothOff()
+
 log.info("Battery Protector started")
 
 while True:  
@@ -23,12 +49,10 @@ while True:
         battery = psutil.sensors_battery()
         plugged = battery.power_plugged
         battery_percent = battery.percent
-        if (plugged == True and battery_percent > 85):
-            sendCommand('0')
-            log.info("Charge off")
-        if (plugged == False and battery_percent < 65):
-            sendCommand('1')
-            log.info("Charge on")
+        if (plugged == True and battery_percent > 87):            
+            setCharger("Off")
+        if (plugged == False and battery_percent < 60):
+            setCharger("On")
         time.sleep(60)
     except Exception as e:
         log.error(str(e))

@@ -33,14 +33,16 @@ def setCharger(chargingStatus):
     bluetoothActiveBeforeSettingChargeMode = bluetoothIsActive()
     if (not bluetoothActiveBeforeSettingChargeMode):
         switchBluetoothOn()
-    s = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-    s.connect((batteryProtectorAddress, port))
-    log.info("Charger " + chargingStatus)
-    command = '1' if chargingStatus == "On" else '0'
-    s.send(command)
-    s.close()
-    if (not bluetoothActiveBeforeSettingChargeMode):
-        switchBluetoothOff()
+    try:
+        s = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+        s.connect((batteryProtectorAddress, port))
+        log.info("Charger " + chargingStatus)
+        command = '1' if chargingStatus == "On" else '0'
+        s.send(command)
+        s.close()
+    finally:
+        if (not bluetoothActiveBeforeSettingChargeMode):
+            switchBluetoothOff()
 
 log.info("Battery Protector started")
 
@@ -49,9 +51,9 @@ while True:
         battery = psutil.sensors_battery()
         plugged = battery.power_plugged
         battery_percent = battery.percent
-        if (plugged == True and battery_percent > 87):            
+        if (plugged == True and battery_percent > 90):            
             setCharger("Off")
-        if (plugged == False and battery_percent < 60):
+        if (plugged == False and battery_percent < 75):
             setCharger("On")
         time.sleep(60)
     except Exception as e:
